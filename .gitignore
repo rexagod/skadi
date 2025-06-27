@@ -1,4 +1,7 @@
 .idea
-model.onnx
-hack/venv
+
+skadi
+
+internal/anomaly/venv
+internal/anomaly/__pycache__
 
