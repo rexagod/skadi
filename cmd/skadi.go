@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
 	"flag"
+	"fmt"
 	"io"
 	"net/http"
 	_ "net/http/pprof"
@@ -24,18 +26,26 @@ func main() {
 	logger := klog.FromContext(ctx).WithName("skadi")
 
 	flagSet := flag.NewFlagSet("skadi", flag.ExitOnError)
-	forwardingAddr := flagSet.String("forwarding-addr", "http://127.0.0.1:8001", "Address used to forward requests to metrics-server")
+	forwardingAddr := flagSet.String("forwarding-addr", "https://127.0.0.1:10250", "Address used to forward requests to metrics-server")
 	listenPort := flagSet.String("listen-port", ":8002", "Address used to listen for incoming requests")
+	tlsCert := flagSet.String("tls-cert", "/tmp/tls/tls.crt", "Path to proxy's TLS certificate")
+	tlsKey := flagSet.String("tls-key", "/tmp/tls/tls.key", "Path to proxy's TLS key")
 	err := flagSet.Parse(os.Args[1:])
 	if err != nil {
 		klog.Fatalf("Error parsing flags: %v", err)
 	}
 
 	resourcePath := "/apis/" + metricsapi.SchemeGroupVersion.String()
-	podsPath := resourcePath + "/pods/" // anomaly score?
+	podsPath := resourcePath + "/pods/"
 	nodesPath := resourcePath + "/nodes/"
 
-	anomalyPlugin := anomaly.NewAnomalyPlugin(logger, *forwardingAddr, *listenPort, podsPath, nodesPath)
+	tokenRaw, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
+	if err != nil {
+		klog.Fatalf("failed to read token file: %v", err)
+	}
+	token := string(tokenRaw)
+
+	anomalyPlugin := anomaly.NewAnomalyPlugin(logger, token, *forwardingAddr, *listenPort, podsPath, nodesPath)
 	anomalyPluginFlagSet := anomalyPlugin.FlagSet()
 	err = anomalyPluginFlagSet.Parse(os.Args[1:])
 	if err != nil {
@@ -47,17 +57,27 @@ func main() {
 	mux.HandleFunc(podsPath+"anomalies", anomalyPlugin.HandlePodAnomalies(ctx))
 
 	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		targetURL := *forwardingAddr + r.URL.Path
-		req, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
+		klog.Infof("Proxying request: %s %s", r.Method, r.URL.Path)
+
+		req, err := http.NewRequestWithContext(r.Context(), r.Method, *forwardingAddr+r.URL.Path, r.Body)
 		if err != nil {
-			http.Error(w, "failed to create fallback proxy request", http.StatusInternalServerError)
+			http.Error(w, fmt.Sprintf("failed to create request: %v", err), http.StatusInternalServerError)
 			return
 		}
 		req.Header = r.Header.Clone()
+		req.Header.Set("Authorization", "Bearer "+token)
 
-		resp, err := http.DefaultClient.Do(req)
+		insecureClient := &http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: &tls.Config{
+					InsecureSkipVerify: true,
+				},
+			},
+		}
+
+		resp, err := insecureClient.Do(req)
 		if err != nil {
-			http.Error(w, "fallback proxy failed", http.StatusBadGateway)
+			http.Error(w, fmt.Sprintf("failed to forward request: %v", err), http.StatusBadGateway)
 			return
 		}
 		defer resp.Body.Close()
@@ -77,9 +97,9 @@ func main() {
 		Name:           "X-Real-IP",
 		IndexFromRight: 0,
 	})
-	err = http.ListenAndServe(*listenPort, tollbooth.HTTPMiddleware(lmt)(mux))
+	err = http.ListenAndServeTLS(*listenPort, *tlsCert, *tlsKey, tollbooth.HTTPMiddleware(lmt)(mux))
 	if err != nil {
-		klog.Exitf("Failed to start server: %v", err)
+		klog.Exitf("Failed to start HTTPS server: %v", err)
 	}
 }
 

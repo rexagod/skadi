@@ -3,9 +3,11 @@ package anomaly
 import (
 	"bytes"
 	"context"
+	"crypto/tls"
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
 	"net/http"
 	"sort"
 	"sync"
@@ -29,15 +31,17 @@ type Plugin struct {
 	listenAddr     string
 	podsPath       string
 	nodesPath      string
+	token          string
 }
 
-func NewAnomalyPlugin(logger logr.Logger, forwardingAddr, listenAddr, podsPath, nodesPath string) *Plugin {
+func NewAnomalyPlugin(logger logr.Logger, token, forwardingAddr, listenAddr, podsPath, nodesPath string) *Plugin {
 	return &Plugin{
 		logger:         logger,
 		forwardingAddr: forwardingAddr,
 		listenAddr:     listenAddr,
 		podsPath:       podsPath,
 		nodesPath:      nodesPath,
+		token:          token,
 	}
 }
 
@@ -54,6 +58,7 @@ var (
 
 func (p *Plugin) FlagSet() *flag.FlagSet {
 	fs := flag.NewFlagSet("anomaly-plugin", flag.ExitOnError)
+
 	enable = fs.Bool(fmt.Sprintf("%s-enable", p.Name()), true, "Enable anomaly detection plugin")
 	pollInterval = fs.Duration(fmt.Sprintf("%s-poll-interval", p.Name()), 10*time.Second, "Polling interval for snapshotting metrics (0 to disable polling)")
 	thresholdPercentile = fs.Int(fmt.Sprintf("%s-threshold-percentile", p.Name()), 99, "Percentile threshold for anomaly detection (0 to disable thresholding)")
@@ -157,16 +162,30 @@ func (p *Plugin) snapshotWithPrediction(shouldSnapshot, shouldPredict bool) (err
 		return
 	}
 
-	response, err := http.Get(p.forwardingAddr + p.podsPath)
-	if err != nil {
-		return fmt.Errorf("error fetching metrics from proxy URL: %w", err), nil, nil
+	insecureClient := &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		},
 	}
-	defer response.Body.Close()
+
+	req, err := http.NewRequest(http.MethodGet, p.forwardingAddr+p.podsPath, nil)
+	if err != nil {
+		return fmt.Errorf("error creating request to metrics-server: %w", err), nil, nil
+	}
+	req.Header.Set("Authorization", "Bearer "+string(p.token))
+
+	resp, err := insecureClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("error fetching metrics from metrics-server: %w", err), nil, nil
+	}
+	defer resp.Body.Close()
+
+	bodyBytes, _ := io.ReadAll(resp.Body)
 
 	var podMetrics metricsv1beta1.PodMetricsList
-	err = json.NewDecoder(response.Body).Decode(&podMetrics)
+	err = json.Unmarshal(bodyBytes, &podMetrics)
 	if err != nil {
-		return fmt.Errorf("error decoding metrics from proxy URL: %w", err), nil, nil
+		return fmt.Errorf("error decoding metrics from metrics-server: %s: %w", string(bodyBytes), err), nil, nil
 	}
 	for _, pod := range podMetrics.Items {
 		containerScores := make([]float32, 0)
@@ -177,13 +196,19 @@ func (p *Plugin) snapshotWithPrediction(shouldSnapshot, shouldPredict bool) (err
 				gotCPUNanocores float64
 				gotMemoryKibs   float64
 			)
-			_, err = fmt.Sscanf(container.Usage.Cpu().String(), "%fn", &gotCPUNanocores)
+
+			gotCPUNanocoresString := container.Usage.Cpu().String()
+			_, err = fmt.Sscanf(gotCPUNanocoresString, "%fn", &gotCPUNanocores)
 			if err != nil {
-				return fmt.Errorf("error parsing CPU usage from proxy URL: %w", err), nil, nil
+				// TODO: Add "0" case
+				return fmt.Errorf("error parsing CPU usage: %f: %w", gotCPUNanocoresString, err), nil, nil
 			}
-			_, err = fmt.Sscanf(container.Usage.Memory().String(), "%fKi", &gotMemoryKibs)
+
+			gotMemoryKibsString := container.Usage.Memory().String()
+			_, err = fmt.Sscanf(gotMemoryKibsString, "%fKi", &gotMemoryKibs)
 			if err != nil {
-				return fmt.Errorf("error parsing memory usage from proxy URL: %w", err), nil, nil
+				// TODO: Add "Mi" case
+				return fmt.Errorf("error parsing memory usage: %f: %w", gotMemoryKibsString, err), nil, nil
 			}
 
 			if shouldSnapshot {

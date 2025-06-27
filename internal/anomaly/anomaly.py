@@ -9,7 +9,7 @@ app = Flask(__name__)
 COLLECTION_NAME = "metrics"
 VECTOR_SIZE = 2
 
-QDRANT_HOST = os.environ.get("QDRANT_HOST", "0.0.0.0")
+QDRANT_HOST = os.environ.get("QDRANT_HOST", "127.0.0.1")
 QDRANT_PORT = int(os.environ.get("QDRANT_PORT", 6333))
 client = QdrantClient(host=QDRANT_HOST, port=QDRANT_PORT)
 
@@ -74,5 +74,5 @@ def predict():
         return jsonify({'error': str(e)}), 500
 
 if __name__ == '__main__':
-    # For production, use: gunicorn -w 4 -b 0.0.0.0:5001 anomaly:app
+    # For production, use: gunicorn -w 4 -b 127.0.0.1:5001 anomaly:app
     app.run(host=QDRANT_HOST, port=5001)

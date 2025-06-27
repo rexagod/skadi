@@ -95,6 +95,21 @@ subjects:
   name: metrics-server
   namespace: kube-system
 ---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metrics-server:aggregated-metrics-reader
+  labels:
+    k8s-app: metrics-server
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:aggregated-metrics-reader
+subjects:
+- kind: ServiceAccount
+  name: metrics-server
+  namespace: kube-system
+---
 apiVersion: v1
 kind: Service
 metadata:
@@ -106,7 +121,6 @@ spec:
   ports:
   - name: https
     port: 443
-    protocol: TCP
     targetPort: 8002
   selector:
     k8s-app: metrics-server
@@ -132,24 +146,41 @@ spec:
     spec:
       containers:
       - name: skadi
-        image: ghcr.io/rexagod/skadi:latest
+        image: skadi:latest
+        imagePullPolicy: IfNotPresent
         ports:
           - containerPort: 8002
       - name: skadi-anomaly-plugin
-        image: ghcr.io/rexagod/skadi-anomaly-plugin:latest
+        image: skadi-anomaly-plugin:latest
+        imagePullPolicy: IfNotPresent
         ports:
           - containerPort: 5001
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
       - name: qdrant
         image: qdrant/qdrant:v1.14.1
         ports:
           - containerPort: 6333
           - containerPort: 6334
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
       - args:
         - --cert-dir=/tmp
         - --secure-port=10250
         - --kubelet-preferred-address-types=InternalIP,ExternalIP,Hostname
         - --kubelet-use-node-status-port
         - --metric-resolution=15s
+        - --kubelet-insecure-tls # TODO: skaffold dev -p test
         image: registry.k8s.io/metrics-server/metrics-server:v0.7.2
         imagePullPolicy: IfNotPresent
         livenessProbe:
