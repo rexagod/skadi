@@ -148,7 +148,7 @@ spec:
     spec:
       containers:
       - name: skadi
-        image: ghcr.io/rexagod/skadi:4cef55e
+        image: ghcr.io/rexagod/skadi:9d6be3e
         imagePullPolicy: IfNotPresent
         ports:
           - containerPort: 8002
@@ -156,7 +156,7 @@ spec:
           - name: SA_TOKEN_PATH
             value: "/var/run/secrets/kubernetes.io/serviceaccount/token"
       - name: skadi-anomaly-plugin
-        image: ghcr.io/rexagod/skadi-anomaly-plugin:4cef55e
+        image: ghcr.io/rexagod/skadi-anomaly-plugin:9d6be3e
         imagePullPolicy: IfNotPresent
         ports:
           - containerPort: 5001

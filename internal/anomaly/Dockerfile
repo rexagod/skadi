@@ -6,9 +6,7 @@ WORKDIR /app
 
 COPY requirements.txt ./
 
-# s/sklearn/scikit-learn
-RUN export SKLEARN_ALLOW_DEPRECATED_SKLEARN_PACKAGE_INSTALL=True && \
-    python -m venv venv && \
+RUN python -m venv venv && \
     ./venv/bin/pip install --upgrade pip && \
     ./venv/bin/pip install -r requirements.txt
 
