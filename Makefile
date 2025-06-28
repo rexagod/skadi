@@ -1,4 +1,9 @@
+IMAGE_TAG ?= $(shell git rev-parse --short=6 HEAD)
+
 MAIN = cmd/skadi
+
+MAIN_DOCKERFILE=Dockerfile
+MAIN_IMAGE=skadi:$(IMAGE_TAG)
 
 MODEL_DIR=internal/anomaly
 MODEL_GEN=$(MODEL_DIR)/anomaly.py
@@ -9,17 +14,14 @@ MODEL_PKG = pkg/anomaly
 MODEL_DEEPCOPY_GEN = $(MODEL_PKG)/zz_generated.deepcopy.go
 MODEL_TYPES = $(MODEL_PKG)/types.go
 
+MODEL_DOCKERFILE=$(MODEL_DIR)/Dockerfile
+MODEL_IMAGE=skadi-anomaly-plugin:$(IMAGE_TAG)
+
 VENV_DIR=$(MODEL_DIR)/venv
 VENV_PYTHON=$(VENV_DIR)/bin/python
 VENV_PIP=$(VENV_DIR)/bin/pip
 
 ASSETS_DIR=assets
-
-DOCKERFILE_MAIN=Dockerfile
-DOCKERFILE_MODEL=$(MODEL_DIR)/Dockerfile
-
-MAIN_IMAGE=skadi:latest
-MODEL_IMAGE=skadi-anomaly-plugin:latest
 
 PYTHON ?= python3
 
@@ -37,12 +39,12 @@ $(VENV_DIR): $(MODEL_REQUIREMENTS)
 $(MODEL_DEEPCOPY_GEN): $(MODEL_TYPES)
 	$(CONTROLLER_GEN) object paths="./pkg/anomaly/..."
 
-$(DOCKERFILE_MAIN): $(MAIN)
-	docker build --load -t $(MAIN_IMAGE) -f $(DOCKERFILE_MAIN) . && \
+$(MAIN_DOCKERFILE): $(MAIN)
+	docker build --load -t $(MAIN_IMAGE) . && \
 	kind load docker-image $(MAIN_IMAGE) || true
 
-$(DOCKERFILE_MODEL): $(MODEL_GEN) $(MODEL_CLIENT) $(MODEL_REQUIREMENTS)
-	docker build --load -t $(MODEL_IMAGE) -f $(DOCKERFILE_MODEL) $(MODEL_DIR) && \
+$(MODEL_DOCKERFILE): $(MODEL_GEN) $(MODEL_CLIENT) $(MODEL_REQUIREMENTS)
+	docker build --load -t $(MODEL_IMAGE) $(MODEL_DIR) && \
 	kind load docker-image $(MODEL_IMAGE) || true
 
 .PHONY: run-anomaly

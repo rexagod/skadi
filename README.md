@@ -4,7 +4,7 @@ Skaði is a `metrics-server` sidecar reverse-proxy that enables anomaly detectio
 
 ## Goal
 
-Skaði aims to extend `metrics-server` through plugins, the first of which is the `anomaly` plugin.
+Skaði aims to extend `metrics-server` through plugins, the first of which is the anomaly detection plugin.
 
 This plugin allows for the detection and injection of anomalies in metrics data, using the [Qdrant](https://qdrant.tech) vector database, which is used to extend the metrics API with anomaly detection capabilities.
 
@@ -47,3 +47,11 @@ GET /apis/metrics.k8s.io/v1beta1/pods/anomalies
 Note that Skaði proxies the all non-`/anomalies` requests to the `metrics-server`, to avoid breaking existing functionality.
 
 As such, all workloads that engage with the Metrics API (or `metrics-server`, in case of Kubelet) will continue to work as expected.
+
+## Try it out!
+
+The [components.yaml](./assets/components.yaml) bundles `metrics-server` alongside Skaði, Qdrant, and the anomaly detection plugin.
+
+```console
+kubectl apply -f https://raw.githubusercontent.com/rexagod/skadi/refs/heads/main/assets/components.yaml
+```

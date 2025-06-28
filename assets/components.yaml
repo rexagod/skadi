@@ -1,3 +1,5 @@
+# TODO: Use Kustomize to manage this file on top of metrics-server's components.yaml.
+---
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -146,12 +148,12 @@ spec:
     spec:
       containers:
       - name: skadi
-        image: skadi:latest
+        image: ghcr.io/rexagod/skadi:564615
         imagePullPolicy: IfNotPresent
         ports:
           - containerPort: 8002
       - name: skadi-anomaly-plugin
-        image: skadi-anomaly-plugin:latest
+        image: ghcr.io/rexagod/skadi-anomaly-plugin:564615
         imagePullPolicy: IfNotPresent
         ports:
           - containerPort: 5001
