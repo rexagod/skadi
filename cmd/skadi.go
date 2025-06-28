@@ -39,11 +39,18 @@ func main() {
 	podsPath := resourcePath + "/pods/"
 	nodesPath := resourcePath + "/nodes/"
 
-	tokenRaw, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/token")
+	tokenPath, found := os.LookupEnv("SA_TOKEN_PATH")
+	if !found {
+		klog.Fatal("SA_TOKEN_PATH environment variable is not set")
+	}
+	tokenRaw, err := os.ReadFile(tokenPath)
 	if err != nil {
 		klog.Fatalf("failed to read token file: %v", err)
 	}
 	token := string(tokenRaw)
+	if token == "" {
+		klog.Fatal("SA_TOKEN_PATH file is empty")
+	}
 
 	anomalyPlugin := anomaly.NewAnomalyPlugin(logger, token, *forwardingAddr, *listenPort, podsPath, nodesPath)
 	anomalyPluginFlagSet := anomalyPlugin.FlagSet()

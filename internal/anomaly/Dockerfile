@@ -4,16 +4,16 @@ FROM python:3.13-slim
 
 WORKDIR /app
 
-# Copy requirements and install dependencies
 COPY requirements.txt ./
-RUN python -m venv venv && \
+
+# s/sklearn/scikit-learn
+RUN export SKLEARN_ALLOW_DEPRECATED_SKLEARN_PACKAGE_INSTALL=True && \
+    python -m venv venv && \
     ./venv/bin/pip install --upgrade pip && \
     ./venv/bin/pip install -r requirements.txt
 
-# Copy the anomaly.py script
 COPY anomaly.py ./
 
-# Set environment variables for venv
 ENV PATH="/app/venv/bin:$PATH"
 
 EXPOSE 5001

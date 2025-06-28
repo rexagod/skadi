@@ -10,7 +10,6 @@ COPY . .
 
 RUN CGO_ENABLED=0 GOOS=linux go build -o /main ./cmd
 
-# Generate self-signed TLS cert and key in a separate stage
 FROM debian:stable-slim AS certgen
 
 RUN apt-get update && apt-get install -y openssl && rm -rf /var/lib/apt/lists/*
@@ -20,7 +19,6 @@ RUN mkdir -p /tmp/tls \
     && chmod 755 /tmp/tls \
     && chmod 644 /tmp/tls/tls.crt /tmp/tls/tls.key
 
-# Final image
 FROM curlimages/curl
 
 COPY --from=builder /main /main

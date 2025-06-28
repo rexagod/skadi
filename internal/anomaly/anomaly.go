@@ -68,7 +68,8 @@ func (p *Plugin) FlagSet() *flag.FlagSet {
 }
 
 type ScoreWrapper struct {
-	AnomalyScore float32 `json:"anomaly_score"`
+	AnomalyScore                float32 `json:"anomaly_score"`
+	IsolationForestAnomalyScore float32 `json:"isolation_forest_anomaly_score"`
 }
 
 var syncOnce = &sync.Once{}
@@ -200,7 +201,7 @@ func (p *Plugin) snapshotWithPrediction(shouldSnapshot, shouldPredict bool) (err
 			gotCPUNanocoresString := container.Usage.Cpu().String()
 			_, err = fmt.Sscanf(gotCPUNanocoresString, "%fn", &gotCPUNanocores)
 			if err != nil {
-				// TODO: Add "0" case
+				// TODO: Add "0"/"u" case
 				return fmt.Errorf("error parsing CPU usage: %f: %w", gotCPUNanocoresString, err), nil, nil
 			}
 
@@ -224,13 +225,19 @@ func (p *Plugin) snapshotWithPrediction(shouldSnapshot, shouldPredict bool) (err
 					return fmt.Errorf("error predicting anomalies: %w", err), nil, nil
 				}
 
+				var anomalyScore float32
+				if result.IsolationForestAnomalyScore != 0 {
+					anomalyScore = result.IsolationForestAnomalyScore
+				} else {
+					anomalyScore = result.AnomalyScore
+				}
 				containerMetric := containerMetricsWithAnomaly{
 					ContainerMetrics: container,
-					AnomalyScore:     result.AnomalyScore,
+					AnomalyScore:     anomalyScore,
 				}
 				containerMetrics = append(containerMetrics, containerMetric)
 
-				containerScores = append(containerScores, result.AnomalyScore)
+				containerScores = append(containerScores, anomalyScore)
 			}
 
 			anomaly := podMetricsWithAnomaly{

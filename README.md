@@ -6,7 +6,9 @@ Skaði is a `metrics-server` sidecar reverse-proxy that enables anomaly detectio
 
 Skaði aims to extend `metrics-server` through plugins, the first of which is the anomaly detection plugin.
 
-This plugin allows for the detection and injection of anomalies in metrics data, using the [Qdrant](https://qdrant.tech) vector database, which is used to extend the metrics API with anomaly detection capabilities.
+This plugin allows for the detection of anomalies in metrics data, using the similar datasets fetched for the queried point (`[CPU, Memory]`) in the [Qdrant](https://qdrant.tech) vector database, which then runs through `sklearn`'s Isolation Forests to determine its anomaly score.
+
+This data is used to extend the metrics API with anomaly detection capabilities.
 
 ```http request
 GET /apis/metrics.k8s.io/v1beta1/pods/anomalies
